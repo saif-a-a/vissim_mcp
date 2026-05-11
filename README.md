@@ -8,7 +8,7 @@
 
 Bridge Claude AI (or any MCP-compatible LLM) to PTV Vissim for microscopic traffic simulation — load networks, run simulations, query road elements, extract evaluation data, and modify signal timings, all through natural language.
 
-Inspired by [QGIS MCP](https://github.com/jjsantos01/qgis_mcp) (660+ stars).
+
 
 ---
 
@@ -21,7 +21,7 @@ Claude / LLM Client
 ┌──────────────────────┐
 │  Vissim MCP Server   │   FastMCP Python
 │  ┌────────────────┐  │
-│  │  35+ Tools     │  │   @mcp.tool() decorators
+│  │  35+ Tools     │  │   
 │  │  4 Resources   │  │
 │  └───────┬────────┘  │
 │          │            │
