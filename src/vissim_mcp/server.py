@@ -44,6 +44,7 @@ from .tools.network import register_network_tools
 from .tools.simulation import register_simulation_tools
 from .tools.evaluation import register_evaluation_tools
 from .tools.visualization import register_visualization_tools
+from .tools.ai_tools import register_ai_tools
 
 logger = logging.getLogger("vissim-mcp")
 
@@ -118,6 +119,7 @@ def create_server(backend_type: str = "mock") -> FastMCP:
     register_simulation_tools(server, _get)
     register_evaluation_tools(server, _get)
     register_visualization_tools(server, _get)
+    register_ai_tools(server, _get)
 
     # ── Resources ──────────────────────────────────────────
 

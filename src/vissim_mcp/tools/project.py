@@ -1,6 +1,7 @@
 """Project management tools: connect, load, save, get info."""
 
 from typing import Optional
+import json
 
 
 def register_project_tools(mcp, get_backend):
@@ -69,3 +70,11 @@ def register_project_tools(mcp, get_backend):
         """
         backend = get_backend()
         return backend.get_project_info()
+    
+
+    @mcp.tool()
+    async def ai_execute(query: str) -> str:
+        backend = get_backend()
+        result = backend.vissim_ai_execute(query=query)
+        return json.dumps(result, indent=2)
+

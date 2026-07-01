@@ -17,6 +17,10 @@ COM Object Hierarchy:
 from typing import Any, Optional
 
 from .base import VissimBackend
+import json
+import textwrap
+import anthropic
+
 
 
 class COMBackend(VissimBackend):
@@ -57,13 +61,18 @@ class COMBackend(VissimBackend):
             # Start a new instance
             self._vissim = win32com.client.Dispatch("Vissim.Vissim")
 
-        self._vissim.Visible = visible
+        # Try to set visibility (may not be supported on all instances)
+        try:
+            self._vissim.Visible = visible
+        except Exception:
+            pass  # Visible property may not be settable on running instances
+        
         self._connected = True
 
         return {
             "status": "connected",
             "backend": "com",
-            "version": self._safe_get("Version", "unknown"),
+            "version": self._safe_get("Vissim", "Version"),
             "visible": visible,
             "message": "Connected to PTV Vissim via COM",
         }
@@ -99,15 +108,42 @@ class COMBackend(VissimBackend):
     def get_project_info(self) -> dict:
         self._ensure_connected()
         net = self._vissim.Net
+        
+        # Safely get counts for each collection
+        try:
+            num_links = net.Links.Count
+        except Exception:
+            num_links = 0
+        
+        try:
+            num_nodes = net.Nodes.Count
+        except Exception:
+            num_nodes = 0
+        
+        try:
+            num_signals = net.SignalControllers.Count
+        except Exception:
+            num_signals = 0
+        
+        try:
+            num_vehicle_inputs = net.VehicleInputs.Count
+        except Exception:
+            num_vehicle_inputs = 0
+        
+        try:
+            num_vehicle_routes = net.VehicleRoutes.Count
+        except Exception:
+            num_vehicle_routes = 0
+        
         return {
             "loaded": True,
             "backend": "com",
-            "version": self._safe_get("Version", "unknown"),
-            "num_links": self._safe_get(net.Links, "Count", 0),
-            "num_nodes": self._safe_get(net.Nodes, "Count", 0),
-            "num_signals": self._safe_get(net.SignalControllers, "Count", 0),
-            "num_vehicle_inputs": self._safe_get(net.VehicleInputs, "Count", 0),
-            "num_vehicle_routes": self._safe_get(net.VehicleRoutes, "Count", 0),
+            "version": self._safe_get(self._vissim, "Version", "unknown"),
+            "num_links": num_links,
+            "num_nodes": num_nodes,
+            "num_signals": num_signals,
+            "num_vehicle_inputs": num_vehicle_inputs,
+            "num_vehicle_routes": num_vehicle_routes,
             "simulation_state": self.get_simulation_state(),
         }
 
@@ -115,73 +151,160 @@ class COMBackend(VissimBackend):
 
     def get_links(self, limit: int = 50, offset: int = 0) -> list[dict]:
         self._ensure_connected()
-        links = self._vissim.Net.Links
+        try:
+            links = self._vissim.Net.Links
+        except Exception as e:
+            return [{"error": f"Failed to access links: {e}"}]
+        
         result = []
-        for i in range(offset + 1, min(offset + limit + 1, links.Count + 1)):
-            link = links.Item(i)
-            result.append({
-                "id": i,
-                "name": self._safe_get(link, "Name", f"Link_{i}"),
-                "number": i,
-                "length_m": self._safe_get(link, "AttValue('Length')", 0.0),
-                "num_lanes": self._safe_get(link, "AttValue('NumLanes')", 1),
-            })
+        try:
+            count = links.Count
+        except Exception:
+            count = 0
+        
+        for i in range(offset + 1, min(offset + limit + 1, count + 1)):
+            try:
+                # Try using parentheses first
+                try:
+                    link = links(i)
+                except Exception:
+                    link = links.Item(i)
+                result.append({
+                    "id": i,
+                    "name": self._safe_get(link, "Name", f"Link_{i}"),
+                    "number": i,
+                    "length_m": self._safe_get(link, "AttValue('Length')", 0.0),
+                    "num_lanes": self._safe_get(link, "AttValue('NumLanes')", 1),
+                })
+            except Exception as e:
+                result.append({"error": f"Failed to access link {i}: {e}"})
         return result
 
     def get_nodes(self, limit: int = 50, offset: int = 0) -> list[dict]:
         self._ensure_connected()
-        nodes = self._vissim.Net.Nodes
+        try:
+            nodes = self._vissim.Net.Nodes
+        except Exception as e:
+            return [{"error": f"Failed to access nodes: {e}"}]
+        
         result = []
-        for i in range(offset + 1, min(offset + limit + 1, nodes.Count + 1)):
-            node = nodes.Item(i)
-            result.append({
-                "id": i,
-                "name": self._safe_get(node, "Name", f"Node_{i}"),
-                "number": i,
-            })
+        try:
+            count = nodes.Count
+        except Exception:
+            count = 0
+        
+        for i in range(offset + 1, min(offset + limit + 1, count + 1)):
+            try:
+                # Try using parentheses first
+                try:
+                    node = nodes(i)
+                except Exception:
+                    node = nodes.Item(i)
+                result.append({
+                    "id": i,
+                    "name": self._safe_get(node, "Name", f"Node_{i}"),
+                    "number": i,
+                })
+            except Exception as e:
+                result.append({"error": f"Failed to access node {i}: {e}"})
         return result
 
     def get_signal_controllers(self) -> list[dict]:
         self._ensure_connected()
-        scs = self._vissim.Net.SignalControllers
+        try:
+            scs = self._vissim.Net.SignalControllers
+        except Exception as e:
+            return [{"error": f"Failed to access signal controllers: {e}"}]
+        
         result = []
-        for i in range(1, scs.Count + 1):
-            sc = scs.Item(i)
-            result.append({
-                "id": i,
-                "name": self._safe_get(sc, "Name", f"SC_{i}"),
-                "number": i,
-                "cycle_time_s": self._safe_get(sc, "AttValue('CycleTime')", 0.0),
-                "num_groups": self._safe_get(sc.SignalGroups, "Count", 0),
-            })
+        try:
+            count = scs.Count
+        except Exception:
+            count = 0
+        
+        for i in range(1, count + 1):
+            try:
+                # Try using parentheses first
+                try:
+                    sc = scs(i)
+                except Exception:
+                    sc = scs.Item(i)
+                result.append({
+                    "id": i,
+                    "name": self._safe_get(sc, "Name", f"SC_{i}"),
+                    "number": i,
+                    "cycle_time_s": self._safe_get(sc, "AttValue('CycleTime')", 0.0),
+                    "num_groups": self._safe_get(sc.SignalGroups, "Count", 0),
+                })
+            except Exception as e:
+                result.append({"error": f"Failed to access signal controller {i}: {e}"})
         return result
 
     def get_vehicle_inputs(self) -> list[dict]:
         self._ensure_connected()
-        inputs = self._vissim.Net.VehicleInputs
+        try:
+            inputs = self._vissim.Net.VehicleInputs
+        except Exception as e:
+            return [{"error": f"Failed to access vehicle inputs: {e}"}]
+        
         result = []
-        for i in range(1, inputs.Count + 1):
-            vi = inputs.Item(i)
-            result.append({
-                "id": i,
-                "name": self._safe_get(vi, "Name", f"VI_{i}"),
-                "link_id": self._safe_get(vi, "AttValue('Link')", 0),
-                "volume_veh_h": self._safe_get(vi, "AttValue('Volume(1)')", 0.0),
-            })
+        try:
+            count = inputs.Count
+        except Exception:
+            count = 0
+        
+        for i in range(1, count + 1):
+            try:
+                # Try using parentheses instead of Item()
+                vi = inputs(i)
+                result.append({
+                    "id": i,
+                    "name": self._safe_get(vi, "Name", f"VI_{i}"),
+                    "link_id": self._safe_get(vi, "AttValue('Link')", 0),
+                    "volume_veh_h": self._safe_get(vi, "AttValue('Volume(1)')", 0.0),
+                })
+            except Exception as e:
+                # If parentheses don't work, try Item()
+                try:
+                    vi = inputs.Item(i)
+                    result.append({
+                        "id": i,
+                        "name": self._safe_get(vi, "Name", f"VI_{i}"),
+                        "link_id": self._safe_get(vi, "AttValue('Link')", 0),
+                        "volume_veh_h": self._safe_get(vi, "AttValue('Volume(1)')", 0.0),
+                    })
+                except Exception as e2:
+                    result.append({"error": f"Failed to access vehicle input {i}: {e} / {e2}"})
         return result
 
     def get_vehicle_routes(self) -> list[dict]:
         self._ensure_connected()
-        routes = self._vissim.Net.VehicleRoutes
+        try:
+            routes = self._vissim.Net.VehicleRoutes
+        except Exception as e:
+            return [{"error": f"Failed to access vehicle routes: {e}"}]
+        
         result = []
-        for i in range(1, routes.Count + 1):
-            vr = routes.Item(i)
-            result.append({
-                "id": i,
-                "name": self._safe_get(vr, "Name", f"VR_{i}"),
-                "input_id": 0,
-                "relative_flow": self._safe_get(vr, "AttValue('RelFlow(1)')", 1.0),
-            })
+        try:
+            count = routes.Count
+        except Exception:
+            count = 0
+        
+        for i in range(1, count + 1):
+            try:
+                # Try using parentheses first
+                try:
+                    vr = routes(i)
+                except Exception:
+                    vr = routes.Item(i)
+                result.append({
+                    "id": i,
+                    "name": self._safe_get(vr, "Name", f"VR_{i}"),
+                    "input_id": 0,
+                    "relative_flow": self._safe_get(vr, "AttValue('RelFlow(1)')", 1.0),
+                })
+            except Exception as e:
+                result.append({"error": f"Failed to access vehicle route {i}: {e}"})
         return result
 
     def get_att_value(self, object_type: str, object_id: int, attribute: str) -> Any:
@@ -215,20 +338,36 @@ class COMBackend(VissimBackend):
 
     def get_simulation_state(self) -> dict:
         self._ensure_connected()
-        sim = self._vissim.Simulation
-        return {
-            "is_running": sim.IsSimulationRunning,
-            "simulation_time_s": sim.SimulationTime,
-            "simulation_second": sim.SimulationSecond,
-            "speed": self._safe_get(sim, "Speed", 1),
-        }
+        try:
+            sim = self._vissim.Simulation
+            is_running = self._safe_get(sim, "IsSimulationRunning", False)
+            sim_time = self._safe_get(sim, "SimulationTime", 0.0)
+            sim_second = self._safe_get(sim, "SimulationSecond", 0)
+            speed = self._safe_get(sim, "Speed", 1)
+            return {
+                "is_running": is_running,
+                "simulation_time_s": sim_time,
+                "simulation_second": sim_second,
+                "speed": speed,
+            }
+        except Exception as e:
+            return {
+                "is_running": False,
+                "simulation_time_s": 0.0,
+                "simulation_second": 0,
+                "speed": 1,
+                "error": str(e),
+            }
 
     def set_simulation_period(self, start: int, end: int) -> dict:
         self._ensure_connected()
-        sim = self._vissim.Simulation
-        sim.PeriodStartTime = start
-        sim.PeriodEndTime = end
-        return {"status": "set", "period_start_s": start, "period_end_s": end}
+        try:
+            sim = self._vissim.Simulation
+            sim.PeriodStartTime = start
+            sim.PeriodEndTime = end
+            return {"status": "set", "period_start_s": start, "period_end_s": end}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
 
     # ── Evaluation / Data Extraction ────────────────────────────
 
