@@ -27,9 +27,13 @@ classifiers = [
 
 dependencies = [
     "mcp[cli]>=1.0.0",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
+ai = [
+    "anthropic>=0.40",
+]
 com = [
     "pywin32>=305; platform_system == 'Windows'",
 ]

@@ -5,6 +5,7 @@ __pycache__/
 dist/
 build/
 .eggs/
+/.ruff_cache/
 
 # Virtual environments
 .venv/
@@ -36,3 +37,17 @@ htmlcov/
 *.inp0
 *.err
 *.ver
+
+# Reference data and generated documentation
+*.xml
+*.sig
+*.pdf
+*.xlsx
+*.docx
+*.pptx
+*.txt
+*.csv
+llmsvissim_com_help_2026_full_html/
+llmsvissim_com_help_2026_html_only/
+pdf_out/
+llms/

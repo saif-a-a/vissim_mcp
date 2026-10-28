@@ -193,8 +193,59 @@ python -m vissim_mcp.server --backend com
 Requirements:
 - Windows OS
 - PTV Vissim full license (COM is disabled in Demo/Student editions)
-- Python 3.9+ 64-bit (must match Vissim architecture)
+- Python 3.10+ 64-bit (must match Vissim architecture)
 - pywin32 (`pip install pywin32`)
+
+### Remote VS Code Access (Private Network)
+
+The HTTP transport requires a bearer token. On the licensed Windows host, set
+`VISSIM_API_TOKEN` in the server process environment, then start the server on
+loopback:
+
+```powershell
+$env:VISSIM_API_TOKEN = "<long-random-token-from-your-approved-secret-store>"
+vissim-mcp --backend com --transport http --host 127.0.0.1 --port 8765
+```
+
+Place a TLS reverse proxy or approved identity-aware gateway on the Windows host
+and forward its `/mcp` route to `http://127.0.0.1:8765/mcp`. Restrict the proxy
+and Windows Firewall to your LAN/VPN. Do not expose port 8765 directly or
+forward it from the internet. Anyone with the bearer token can currently use
+all MCP tools, including tools that modify or save a network; share it only with
+trusted operators and rotate it when access should be revoked.
+The remote HTTP server intentionally omits the AI code-generation and
+code-execution tools because code execution would run with the Windows host's
+permissions. For local stdio use of those tools, install the optional `ai`
+extra; do not re-enable arbitrary code execution on a network-facing server.
+
+On the client PC, add the remote server to VS Code's `mcp.json` and replace the
+URL with the private HTTPS address configured on the proxy:
+
+```json
+{
+  "servers": {
+    "vissim": {
+      "type": "http",
+      "url": "https://vissim-host.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:vissim-token}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "vissim-token",
+      "description": "Vissim MCP bearer token",
+      "password": true
+    }
+  ]
+}
+```
+
+Reload the MCP server in VS Code and confirm it connects before using any
+write-capable tools. The Vissim process and MCP server must remain running in
+the Windows user session that can access the licensed Vissim installation.
 
 ---
 

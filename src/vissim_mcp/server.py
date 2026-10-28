@@ -33,18 +33,18 @@ Claude Desktop config (claude_desktop_config.json):
 
 import argparse
 import logging
-import sys
+import os
 from functools import partial
 
 from mcp.server.fastmcp import FastMCP
 
+from .auth import BearerTokenMiddleware
 from .backend.base import VissimBackend
 from .tools.project import register_project_tools
 from .tools.network import register_network_tools
 from .tools.simulation import register_simulation_tools
 from .tools.evaluation import register_evaluation_tools
 from .tools.visualization import register_visualization_tools
-from .tools.ai_tools import register_ai_tools
 
 logger = logging.getLogger("vissim-mcp")
 
@@ -63,11 +63,12 @@ def get_backend() -> VissimBackend:
     return _backend
 
 
-def create_server(backend_type: str = "mock") -> FastMCP:
+def create_server(backend_type: str = "mock", include_ai_tools: bool = True) -> FastMCP:
     """Create and configure the MCP server with all tools registered.
 
     Args:
         backend_type: 'mock' (default, works everywhere) or 'com' (needs Vissim).
+        include_ai_tools: Register code-generation and code-execution tools.
 
     Returns:
         Configured FastMCP server instance.
@@ -119,7 +120,9 @@ def create_server(backend_type: str = "mock") -> FastMCP:
     register_simulation_tools(server, _get)
     register_evaluation_tools(server, _get)
     register_visualization_tools(server, _get)
-    register_ai_tools(server, _get)
+    if include_ai_tools:
+        from .tools.ai_tools import register_ai_tools
+        register_ai_tools(server, _get)
 
     # ── Resources ──────────────────────────────────────────
 
@@ -163,6 +166,12 @@ def create_server(backend_type: str = "mock") -> FastMCP:
     return server
 
 
+def create_http_app(server: FastMCP, token: str | None = None):
+    """Create an authenticated Streamable HTTP app."""
+    app = server.streamable_http_app()
+    return BearerTokenMiddleware(app, token)
+
+
 def main():
     """CLI entry point for the Vissim MCP Server."""
     parser = argparse.ArgumentParser(
@@ -200,11 +209,11 @@ def main():
 
     logger.info(f"Starting Vissim MCP Server (backend={args.backend}, transport={args.transport})")
 
-    server = create_server(args.backend)
+    server = create_server(args.backend, include_ai_tools=args.transport != "http")
 
     if args.transport == "http":
         import uvicorn
-        app = server.streamable_http_app()
+        app = create_http_app(server, os.environ.get("VISSIM_API_TOKEN"))
         logger.info(f"HTTP server at http://{args.host}:{args.port}")
         uvicorn.run(app, host=args.host, port=args.port)
     else:

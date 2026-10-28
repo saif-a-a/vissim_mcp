@@ -41,9 +41,6 @@ import textwrap
 from pathlib import Path
 from typing import Optional
 
-import anthropic
-
-_client = anthropic.Anthropic()   # reads ANTHROPIC_API_KEY from env
 _MODEL  = "claude-sonnet-4-20250514"
 
 # ── Optional: path to your COM API PDF ────────────────────────────────────────
@@ -106,6 +103,12 @@ def _build_system_prompt() -> str:
 # ── Claude call (with optional PDF attachment) ────────────────────────────────
 
 def _call_claude(query: str) -> str:
+    try:
+        import anthropic
+    except ImportError as exc:
+        raise RuntimeError("Install the 'ai' extra to use Vissim code generation.") from exc
+
+    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
     system = _build_system_prompt()
 
     # Build user content — plain text, or text + PDF document block
@@ -131,7 +134,7 @@ def _call_claude(query: str) -> str:
         # OPTION A: system prompt only
         user_content = f"Vissim instruction: {query}"
 
-    response = _client.messages.create(
+    response = client.messages.create(
         model=_MODEL,
         max_tokens=1024,
         system=system,
